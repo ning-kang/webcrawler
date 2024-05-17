@@ -5,10 +5,13 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"sync"
 	"unicode/utf8"
 
 	"github.com/PuerkitoBio/goquery"
 )
+
+var wg sync.WaitGroup
 
 func ScrapePage(url string) {
 	log.Println("Scraping page:", url)
@@ -34,16 +37,31 @@ func ScrapePage(url string) {
 		}
 	})
 
-	var books []Book
+	ch := make(chan Book)
 
 	for _, l := range list {
-		books = scrapeBook(books, l)
+		wg.Add(1)
+		go func(url string) {
+			defer wg.Done() // Important
+			scrapeBook(url, ch)
+		}(l)
 	}
 
-	fmt.Print(books)
+	// The extra goroutine that close the channel when all WaitGroups are done
+	go func() {
+		wg.Wait()
+		close(ch)
+	}()
+
+	// infinite loop until the channel is closed
+	for b := range ch {
+		fmt.Println(b)
+	}
+
+	fmt.Printf("Scraped %v books!", len(list))
 }
 
-func scrapeBook(b []Book, url string) []Book {
+func scrapeBook(url string, ch chan Book) {
 	log.Println("Scraping book:", url)
 	res := get(url)
 	defer res.Body.Close()
@@ -93,7 +111,7 @@ func scrapeBook(b []Book, url string) []Book {
 		})
 	})
 
-	return append(b, book)
+	ch <- book
 }
 
 func trimFirstRune(s string) string {
