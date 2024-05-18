@@ -13,29 +13,12 @@ import (
 
 var wg sync.WaitGroup
 
-func ScrapePage(url string) {
-	log.Println("Scraping page:", url)
-	res := get(url)
-
-	defer res.Body.Close()
-
-	if res.StatusCode != http.StatusOK {
-		log.Fatal("Status code error:", res.StatusCode, res.Status)
-	}
-
-	doc, err := goquery.NewDocumentFromReader(res.Body)
-	if err != nil {
-		log.Fatal("Failed to get html document:", err)
-	}
+func ScrapeBookstore(url string) {
+	log.Println("Scraping bookstore:", url)
 
 	var list []string
 
-	doc.Find(".product_pod").Each(func(i int, s *goquery.Selection) {
-		bookUrl, ok := s.Find("a").Attr("href")
-		if ok {
-			list = append(list, "https://books.toscrape.com/"+bookUrl)
-		}
-	})
+	scrapePage(url, &list) // recursive call to every page
 
 	ch := make(chan Book)
 
@@ -61,13 +44,42 @@ func ScrapePage(url string) {
 	fmt.Printf("Scraped %v books!", len(list))
 }
 
+func scrapePage(url string, list *[]string) {
+	log.Println("Scraping page:", url)
+	res := get(url)
+
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		log.Fatal("Status code error:", res.StatusCode, res.Status)
+	}
+
+	doc, err := goquery.NewDocumentFromReader(res.Body)
+	if err != nil {
+		log.Fatal("Failed to get html document:", err)
+	}
+
+	doc.Find(".product_pod").Each(func(i int, s *goquery.Selection) {
+		bookUrl, ok := s.Find("a").Attr("href")
+		if ok {
+			*list = append(*list, "https://books.toscrape.com/catalogue/"+bookUrl)
+		}
+	})
+
+	next, ok := doc.Find("ul.pager").Find("li.next").Find("a").Attr("href")
+	if ok {
+		scrapePage("https://books.toscrape.com/catalogue/"+next, list)
+	}
+}
+
 func scrapeBook(url string, ch chan Book) {
 	log.Println("Scraping book:", url)
 	res := get(url)
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
-		log.Fatal("Status code error:", res.StatusCode, res.Status)
+		log.Println("Status code error:", res.StatusCode, res.Status)
+		return
 	}
 
 	doc, err := goquery.NewDocumentFromReader(res.Body)

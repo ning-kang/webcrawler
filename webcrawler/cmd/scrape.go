@@ -15,6 +15,6 @@ var scrapeCmd = &cobra.Command{
 	Long:  "Given website URL, scrape the books from BookToScrape",
 	Args:  cobra.MatchAll(cobra.ExactArgs(1), cobra.OnlyValidArgs),
 	Run: func(cmd *cobra.Command, args []string) {
-		internal.ScrapePage(args[0])
+		internal.ScrapeBookstore(args[0])
 	},
 }
